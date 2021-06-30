@@ -1,26 +1,44 @@
 #!/usr/bin/python
 
-import sys
+import argparse
+import os
 
 
-def checkarg(argv):
-    # check if args exist
-    if len(argv) == 0:
-        raise Exception("Please pass in a video to transcode")
+def dir_path(string):
+    if os.path.isdir(string):
+        return string
+    else:
+        raise NotADirectoryError(string)
+
+
+def checkarg(args):
     # check for file or folder
-    for arg in argv:
-        if (not check360file(arg)):
-            raise TypeError("Wrong file type, gopro .360 file only")
+    if args.file:
+        if (not check360file(args.file)):
+            raise TypeError('Wrong file type, gopro .360 file only')
+        else:
+            print('.360 file found')
+    if args.path:
+        # TODO Loop through directory and check each file
+        print(args.path)
 
 
 def check360file(file):
-    return file.endswith(".360")
+    # TODO check for relevant meta-data in file
+    return file.endswith('.360')
 
 
-def main(argv):
-    checkarg(argv)
-    print(".360 file found")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--file', help='the file that you wish to transcode', type=str)
+    parser.add_argument(
+        '-p', '--path', help='directory to bulk parse', type=dir_path)
+    args = parser.parse_args()
+    if not (args.file or args.path):
+        parser.error('No action requested, add --file or --path')
+    checkarg(args)
 
 
-if __name__ == "__main__":
-    main(sys.argv[1:])
+if __name__ == '__main__':
+    main()
