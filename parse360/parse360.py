@@ -12,15 +12,23 @@ def dir_path(string):
 
 
 def checkarg(args):
-    # check for file or folder
     if args.file:
         if (not check360file(args.file)):
             raise TypeError('Wrong file type, gopro .360 file only')
         else:
-            print('.360 file found')
+            print(args.file + ' - .360 file found')
+            # TODO continue processing
     if args.path:
-        # TODO Loop through directory and check each file
         print(args.path)
+        for root, dirname, files in os.walk(args.path):
+            # TODO Support Multiple directories?
+            count = 0
+            for file in files:
+                if not file.startswith('.') and check360file(file):
+                    count += 1
+                    print(file + ' - .360 file found')
+            print(str(count) + ' .360 files found')
+            # TODO continue processing
 
 
 def check360file(file):
