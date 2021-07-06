@@ -20,7 +20,7 @@ def checkarg(args):
             # TODO continue processing
     if args.path:
         print(args.path)
-        for root, dirname, files in os.walk(args.path):
+        for *_, files in os.walk(args.path):
             # TODO Support Multiple directories?
             count = 0
             for file in files:
