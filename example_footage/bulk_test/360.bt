@@ -4,7 +4,7 @@
 //      File: 360.bt
 //   Authors: Robbie Murray
 //   Version: 0.1
-//   Purpose: Defines a template for parsing 360 video files
+//   Purpose: Extension of mp4.bt for parsing Go Pro Max 360 video files
 //  Category: Video
 // File Mask: *.360
 //  ID Bytes: 
@@ -24,10 +24,12 @@ struct compatible_brand;
 struct mp4box;
 struct mp4time;
 struct mp4lang;
+struct gpmfbox;
 struct qtopcolor;
 struct elst_entry;
 struct tkhd_flags;
 struct vmhd_flags;
+
 
 // QuickTime language codes from https://developer.apple.com/library/content/documentation/QuickTime/QTFF/QTFFChap4/qtff4.html#//apple_ref/doc/uid/TP40000939-CH206-34353
 enum qtlang
@@ -252,6 +254,34 @@ string BoxComment(mp4box& box)
         case "TSMP": return "Total Samples delivered";
         case "TIMO": return "Time Offset";
         case "EMPT": return "Empty payload count";
+        default: return "Unknown box type";
+    }
+}
+
+wstring ReadGPMFBox(gpmfbox& box)
+{
+    return box.key.value;
+}
+
+string GPMFComment(gpmfbox& box)
+{
+    switch (box.key.value)
+    {
+        // GoPro Metadata Format
+        case "GPMF": return "GoPro Metadata Format";
+        case "DEVC": return "Unique device source for metadata";
+        case "DVID": return "Device/track ID";
+        case "DVNM": return "Device name";
+        case "STRM": return "Nested signal stream of metadata/telemetry";
+        case "STNM": return "Stream name";
+        case "RMRK": return "Comments for any stream";
+        case "SCAL": return "Scaling factor (divisor)";
+        case "SIUN": return "Standard Units (like SI)";
+        case "UNIT": return "Display units";
+        case "TYPE": return "Typedefs for complex structures";
+        case "TSMP": return "Total Samples delivered";
+        case "TIMO": return "Time Offset";
+        case "EMPT": return "Empty payload count";
         // GoPro MAX Metadata 
         case "ACCL": return "3-axis accelerometer";
         case "GYRO": return "3-axis gyroscope";
@@ -419,6 +449,12 @@ typedef struct
     }
 } boxheader <read=ReadBoxHeader, open=suppress>;
 
+/*
+typedef struct
+{
+    fourcc type;
+} gpmfheader <read=ReadGPMFHeader, open=suppress>;
+*/
 typedef struct
 {
     fourcc brand;
@@ -497,6 +533,145 @@ typedef struct
     uint32 SAP_delta_time28_type3_starts_with1;
 }str_sidx;
 
+typedef uint64 gpmfbox_end <read=ReadGPMFEnd, write=WriteGPMFEnd>;
+
+uint64 ReadGPMFEnd(gpmfbox_end end)
+{
+    return end;
+}
+
+void WriteGPMFEnd(gpmfbox_end &end, uint64 value)
+{
+    end = value;
+}
+
+typedef struct
+{
+    fourcc key;
+    char type;
+    ubyte size;
+    uint16 repeat; 
+    
+} gpmfHeader <read=ReadGPMFBox, comment=GPMFComment>;
+
+typedef struct
+{
+    local uint64 startOffset = FTell();
+    //local uint64 end = ReadGPMFEnd();
+
+    fourcc key;
+    char type;
+    ubyte size;
+    uint16 repeat;
+    local ubyte lsize = size;
+    local uint16 lrepeat = repeat;
+    // account for null block
+    if (lsize < 1 || lrepeat < 1){
+        lsize = 64;
+        lrepeat = 64; 
+    }
+   
+    local uint64 contentsize = lsize*lrepeat;
+    //local uint64 endOffset = startOffset + contentsize + 8;
+    if (contentsize % 4 > 0)
+    {
+        local uint64 contentpadding = 4 - (contentsize % 4);
+        local uint64 content = contentsize + contentpadding;
+        local uint64 endOffset = startOffset + content + 8;
+    }
+    else 
+    {
+        local uint64 contentpadding = 0;
+        local uint64 endOffset = startOffset + contentsize + 8;
+    }
+
+    switch (key.value)
+    {      
+        case "\x00\x00\x00\x00":
+            FSeek(endOffset);//skip parent contentsize
+    }
+
+    // datatype switch
+    switch (type)
+    {
+        // Nested metadata
+        case 0:
+            while (FTell() < endOffset)
+            {
+                gpmfbox box <name="gpmfBox">;
+                if(FTell() != box.endOffset) {
+                    Printf("%s at %d larger then expected. Expected end: %d, Actual: %d\n",
+                                box.key.value,box.startOffset, FTell(), box.endOffset );
+                }
+                FSeek(box.endOffset);
+            }
+            break;
+        case 'b':
+            byte data[contentsize];
+            break;
+        case 'B':
+            ubyte data[contentsize];
+            break;
+        case 'c':
+            char data[contentsize];
+            break;
+        case 'd':
+            double data[(contentsize+contentpadding)/8];
+            break;
+        case 'f':
+            float data[(contentsize+contentpadding)/4];
+            break;
+        case 'F':
+            fourcc key;
+            break;
+        case 'G':
+            // 128-bit id
+            ubyte data[16];
+            break;
+        case 'j':
+            int64 data[(contentsize+contentpadding)/8];
+            break;
+        case 'J':
+            uint64 data[(contentsize+contentpadding)/8];
+            break;
+        case 'l':
+            int32 data[(contentsize+contentpadding)/4];
+            break;
+        case 'L':
+            uint32 data[(contentsize+contentpadding)/4];
+            break;
+        case 'q':
+            // 32-bit Q-number
+            uint32 data[(contentsize+contentpadding)/4];
+            break;
+        case 'Q':
+            // 64-bit Q-number
+            uint64 data[(contentsize+contentpadding)/8];
+            break;
+        case 's':
+            int16 data[(contentsize+contentpadding)/2];
+            break;
+        case 'S':
+            uint16 data[(contentsize+contentpadding)/2];
+            break;
+        case 'U':
+            char utcdate[16];
+            break;
+        //case "\?":
+            //
+            //break;
+        default:
+            FSkip(contentsize);
+            break;
+    }
+    if (contentpadding > 0)
+    {
+        char padding[contentpadding];
+    }
+    
+    
+} gpmfbox <read=ReadGPMFBox, comment=GPMFComment>;
+
 typedef struct
 {
     // Seperated box start/end logic as box sizes being larger than content of the box caused issues
@@ -524,8 +699,6 @@ typedef struct
         case "mvex":
         case "sinf":
         case "schi":
-        case "DEVC":
-        case "GPMF":
 
             while (FTell() < endOffset)
             {
@@ -839,11 +1012,26 @@ typedef struct
             qtgfxmode graphics_mode <name="Graphics Mode">;
             qtopcolor opcolor <name="Opcolor", open=suppress>;
             break;
+        case "GPMF":
+            //WriteGPMFEnd(gpmfbox_end, endOffset);
+            while (FTell() < endOffset)
+            {
+                gpmfbox box<name="gpmfBox">;
+                   
+                // Warn about fixed sizes boxes having content size in header set to larger value.
+                if(FTell() != box.endOffset) {
+                    Printf("%s at %d larger then expected. Expected end: %d, Actual: %d\n",
+                                box.key.value,box.startOffset, FTell(), box.endOffset );
+                }
+                FSeek(box.endOffset);
+            }
+            break;
         default:
             FSkip(contentsize);
             break;
     }
 } mp4box <read=ReadBox, comment=BoxComment>;
+
 
 while (FTell() < FileSize())
 {
