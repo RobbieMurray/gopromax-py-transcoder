@@ -572,18 +572,16 @@ typedef struct
     }
    
     local uint64 contentsize = lsize*lrepeat;
-    //local uint64 endOffset = startOffset + contentsize + 8;
     if (contentsize % 4 > 0)
     {
         local uint64 contentpadding = 4 - (contentsize % 4);
-        local uint64 content = contentsize + contentpadding;
-        local uint64 endOffset = startOffset + content + 8;
     }
     else 
     {
         local uint64 contentpadding = 0;
-        local uint64 endOffset = startOffset + contentsize + 8;
     }
+
+        local uint64 endOffset = startOffset + contentsize + contentpadding + 8;
 
     switch (key.value)
     {      
