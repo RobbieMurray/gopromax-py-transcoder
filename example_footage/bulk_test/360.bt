@@ -241,19 +241,6 @@ string BoxComment(mp4box& box)
         // GoPro Metadata Format
         case "GPMF": return "GoPro Metadata Format";
         case "FIRM": return "Firmware";
-        case "DEVC": return "Unique device source for metadata";
-        case "DVID": return "Device/track ID";
-        case "DVNM": return "Device name";
-        case "STRM": return "Nested signal stream of metadata/telemetry";
-        case "STNM": return "Stream name";
-        case "RMRK": return "Comments for any stream";
-        case "SCAL": return "Scaling factor (divisor)";
-        case "SIUN": return "Standard Units (like SI)";
-        case "UNIT": return "Display units";
-        case "TYPE": return "Typedefs for complex structures";
-        case "TSMP": return "Total Samples delivered";
-        case "TIMO": return "Time Offset";
-        case "EMPT": return "Empty payload count";
         default: return "Unknown box type";
     }
 }
@@ -268,7 +255,6 @@ string GPMFComment(gpmfbox& box)
     switch (box.key.value)
     {
         // GoPro Metadata Format
-        case "GPMF": return "GoPro Metadata Format";
         case "DEVC": return "Unique device source for metadata";
         case "DVID": return "Device/track ID";
         case "DVNM": return "Device name";
@@ -557,15 +543,13 @@ typedef struct
 typedef struct
 {
     local uint64 startOffset = FTell();
-    //local uint64 end = ReadGPMFEnd();
-
     fourcc key;
     char type;
     ubyte size;
     uint16 repeat;
     local ubyte lsize = size;
     local uint16 lrepeat = repeat;
-    // account for null block
+    // account for null block in highlights
     if (lsize < 1 || lrepeat < 1){
         lsize = 64;
         lrepeat = 64; 
@@ -583,13 +567,13 @@ typedef struct
 
         local uint64 endOffset = startOffset + contentsize + contentpadding + 8;
 
+    // Account for null block in highlights
     switch (key.value)
     {      
         case "\x00\x00\x00\x00":
             FSeek(endOffset);//skip parent contentsize
     }
-
-    // datatype switch
+    
     switch (type)
     {
         // Nested metadata
@@ -655,9 +639,12 @@ typedef struct
         case 'U':
             char utcdate[16];
             break;
-        //case "\?":
-            //
-            //break;
+        // Complex data type - doesn't seem to be present with 360 file
+        /*
+        case '?':
+            
+            break;
+        */
         default:
             FSkip(contentsize);
             break;
